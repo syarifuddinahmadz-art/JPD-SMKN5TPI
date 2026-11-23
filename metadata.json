@@ -1,0 +1,6 @@
+{
+  "name": "JPD-SMK — SMK Negeri 5 Tanjungpinang",
+  "description": "Jurnal Pembelajaran Digital SMK Negeri 5 Tanjungpinang untuk pencatatan kegiatan pembelajaran harian, dokumentasi aktivitas mengajar, dan monitoring kepala sekolah.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

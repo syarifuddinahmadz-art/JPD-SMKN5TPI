@@ -1,0 +1,435 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Profil pengguna JPD-SMK SMK Negeri 5 Tanjungpinang beserta status persetujuan dan perannya.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": { "type": "string", "maxLength": 254 },
+        "displayName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "photoURL": { "type": "string", "maxLength": 500 },
+        "nip": { "type": "string", "maxLength": 30 },
+        "jabatan": { "type": "string", "maxLength": 100 },
+        "requestedRole": {
+          "type": "string",
+          "enum": ["ADMIN", "GURU", "KEPALA_SEKOLAH"]
+        },
+        "role": {
+          "type": "string",
+          "enum": ["ADMIN", "GURU", "KEPALA_SEKOLAH", "PENDING"]
+        },
+        "approvalStatus": {
+          "type": "string",
+          "enum": ["PENDING", "APPROVED", "REJECTED"]
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "approvedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "rejectionReason": { "type": "string", "maxLength": 300 }
+      },
+      "required": [
+        "uid",
+        "email",
+        "displayName",
+        "photoURL",
+        "nip",
+        "jabatan",
+        "requestedRole",
+        "role",
+        "approvalStatus",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AcademicYear": {
+      "title": "AcademicYear",
+      "description": "Periode tahun ajaran dan semester aktif di SMK Negeri 5 Tanjungpinang.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 4, "maxLength": 30 },
+        "semester": { "type": "string", "enum": ["GANJIL", "GENAP"] },
+        "isActive": { "type": "boolean" },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "semester", "isActive", "createdBy", "createdAt", "updatedAt"]
+    },
+    "Teacher": {
+      "title": "Teacher",
+      "description": "Data induk guru pengajar SMK Negeri 5 Tanjungpinang.",
+      "type": "object",
+      "properties": {
+        "userUid": { "type": "string", "maxLength": 128 },
+        "fullName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "nip": { "type": "string", "maxLength": 30 },
+        "email": { "type": "string", "maxLength": 254 },
+        "specialty": { "type": "string", "maxLength": 100 },
+        "status": { "type": "string", "enum": ["AKTIF", "NONAKTIF"] },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userUid",
+        "fullName",
+        "nip",
+        "email",
+        "specialty",
+        "status",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "SchoolClass": {
+      "title": "SchoolClass",
+      "description": "Data rombongan belajar dan konsentrasi keahlian SMK Negeri 5 Tanjungpinang.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 2, "maxLength": 50 },
+        "gradeLevel": { "type": "string", "enum": ["X", "XI", "XII", "XIII"] },
+        "major": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "homeroomTeacherId": { "type": "string", "maxLength": 128 },
+        "homeroomTeacherName": { "type": "string", "maxLength": 100 },
+        "studentCount": { "type": "integer" },
+        "status": { "type": "string", "enum": ["AKTIF", "NONAKTIF"] },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "name",
+        "gradeLevel",
+        "major",
+        "homeroomTeacherId",
+        "homeroomTeacherName",
+        "studentCount",
+        "status",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Subject": {
+      "title": "Subject",
+      "description": "Data induk mata pelajaran umum, kejuruan, muatan lokal, dan projek.",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "minLength": 2, "maxLength": 30 },
+        "name": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "category": {
+          "type": "string",
+          "enum": ["UMUM", "KEJURUAN", "MUATAN_LOKAL", "PROJEK_P5"]
+        },
+        "status": { "type": "string", "enum": ["AKTIF", "NONAKTIF"] },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["code", "name", "category", "status", "createdBy", "createdAt", "updatedAt"]
+    },
+    "TeachingSchedule": {
+      "title": "TeachingSchedule",
+      "description": "Jadwal mengajar yang menghubungkan tahun ajaran, guru, kelas, dan mata pelajaran.",
+      "type": "object",
+      "properties": {
+        "academicYearId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "academicYearLabel": { "type": "string", "minLength": 4, "maxLength": 50 },
+        "teacherId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "teacherName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "teacherUid": { "type": "string", "maxLength": 128 },
+        "classId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "className": { "type": "string", "minLength": 2, "maxLength": 50 },
+        "subjectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "subjectName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "dayOfWeek": {
+          "type": "string",
+          "enum": ["SENIN", "SELASA", "RABU", "KAMIS", "JUMAT", "SABTU"]
+        },
+        "periodStart": { "type": "integer" },
+        "periodEnd": { "type": "integer" },
+        "startTime": {
+          "type": "string",
+          "maxLength": 10,
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+        },
+        "endTime": {
+          "type": "string",
+          "maxLength": 10,
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+        },
+        "room": { "type": "string", "maxLength": 60 },
+        "status": { "type": "string", "enum": ["AKTIF", "NONAKTIF"] },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "academicYearId",
+        "academicYearLabel",
+        "teacherId",
+        "teacherName",
+        "teacherUid",
+        "classId",
+        "className",
+        "subjectId",
+        "subjectName",
+        "dayOfWeek",
+        "periodStart",
+        "periodEnd",
+        "startTime",
+        "endTime",
+        "room",
+        "status",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "TeachingJournal": {
+      "title": "TeachingJournal",
+      "description": "Catatan jurnal pembelajaran harian guru beserta ringkasan kehadiran dan dokumentasi kegiatan.",
+      "type": "object",
+      "properties": {
+        "academicYearId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "academicYearLabel": { "type": "string", "minLength": 4, "maxLength": 50 },
+        "scheduleId": { "type": "string", "maxLength": 128 },
+        "teacherUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "teacherName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "classId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "className": { "type": "string", "minLength": 2, "maxLength": 50 },
+        "subjectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "subjectName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "date": {
+          "type": "string",
+          "maxLength": 10,
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "periodStart": { "type": "integer" },
+        "periodEnd": { "type": "integer" },
+        "topic": { "type": "string", "minLength": 3, "maxLength": 300 },
+        "activities": { "type": "string", "minLength": 5, "maxLength": 1500 },
+        "presentCount": { "type": "integer" },
+        "absentCount": { "type": "integer" },
+        "notes": { "type": "string", "maxLength": 800 },
+        "teachingStatus": {
+          "type": "string",
+          "enum": ["TERLAKSANA", "TUGAS_MANDIRI", "PENGGANTI"]
+        },
+        "documentationUrl": { "type": "string", "maxLength": 800 },
+        "documentationCaption": { "type": "string", "maxLength": 200 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "academicYearId",
+        "academicYearLabel",
+        "scheduleId",
+        "teacherUid",
+        "teacherName",
+        "classId",
+        "className",
+        "subjectId",
+        "subjectName",
+        "date",
+        "periodStart",
+        "periodEnd",
+        "topic",
+        "activities",
+        "presentCount",
+        "absentCount",
+        "notes",
+        "teachingStatus",
+        "documentationUrl",
+        "documentationCaption",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "JournalPhoto": {
+      "title": "JournalPhoto",
+      "description": "Lampiran foto dokumentasi kegiatan pembelajaran yang terkompresi ringan apabila Firebase Storage belum diaktifkan.",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "fileName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "mimeType": { "type": "string", "enum": ["image/jpeg", "image/webp"] },
+        "sizeBytes": { "type": "integer" },
+        "dataUrl": { "type": "string", "minLength": 30, "maxLength": 240000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "fileName", "mimeType", "sizeBytes", "dataUrl", "createdAt"]
+    },
+    "PrincipalSupervision": {
+      "title": "PrincipalSupervision",
+      "description": "Catatan supervisi dan tindak lanjut Kepala Sekolah terhadap jurnal pembelajaran guru.",
+      "type": "object",
+      "properties": {
+        "academicYearId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "academicYearLabel": { "type": "string", "minLength": 4, "maxLength": 50 },
+        "journalId": { "type": "string", "maxLength": 128 },
+        "teacherUid": { "type": "string", "maxLength": 128 },
+        "teacherName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "periodMonth": {
+          "type": "string",
+          "minLength": 7,
+          "maxLength": 7,
+          "pattern": "^[0-9]{4}-[0-9]{2}$"
+        },
+        "supervisionStatus": {
+          "type": "string",
+          "enum": ["BAIK", "PERLU_PEMBINAAN", "TINDAK_LANJUT"]
+        },
+        "notes": { "type": "string", "minLength": 5, "maxLength": 1000 },
+        "supervisorUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "supervisorName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "academicYearId",
+        "academicYearLabel",
+        "journalId",
+        "teacherUid",
+        "teacherName",
+        "periodMonth",
+        "supervisionStatus",
+        "notes",
+        "supervisorUid",
+        "supervisorName",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Profil akun pengguna, peran RBAC, dan status persetujuan administrator."
+    },
+    "/academicYears/{yearId}": {
+      "schema": { "$ref": "#/entities/AcademicYear" },
+      "description": "Data periode tahun ajaran dan semester."
+    },
+    "/teachers/{teacherId}": {
+      "schema": { "$ref": "#/entities/Teacher" },
+      "description": "Data induk guru SMK Negeri 5 Tanjungpinang."
+    },
+    "/classes/{classId}": {
+      "schema": { "$ref": "#/entities/SchoolClass" },
+      "description": "Data induk rombongan belajar/kelas."
+    },
+    "/subjects/{subjectId}": {
+      "schema": { "$ref": "#/entities/Subject" },
+      "description": "Data induk mata pelajaran."
+    },
+    "/schedules/{scheduleId}": {
+      "schema": { "$ref": "#/entities/TeachingSchedule" },
+      "description": "Data jadwal mengajar terintegrasi."
+    },
+    "/teachingJournals/{journalId}": {
+      "schema": { "$ref": "#/entities/TeachingJournal" },
+      "description": "Jurnal pembelajaran harian guru dan tautan dokumentasi kegiatan."
+    },
+    "/journalPhotos/{photoId}": {
+      "schema": { "$ref": "#/entities/JournalPhoto" },
+      "description": "Lampiran foto terkompresi untuk dokumentasi kegiatan pembelajaran."
+    },
+    "/supervisions/{supervisionId}": {
+      "schema": { "$ref": "#/entities/PrincipalSupervision" },
+      "description": "Catatan supervisi Kepala Sekolah terhadap pelaksanaan pembelajaran guru."
+    }
+  }
+}

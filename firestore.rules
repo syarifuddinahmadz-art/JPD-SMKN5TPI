@@ -1,0 +1,659 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Reusable Security Primitives ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedEmail() {
+      return request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidOptionalId(id) {
+      return id is string && (id == '' || isValidId(id));
+    }
+
+    function isValidTimeHHMM(val) {
+      return val is string && val.size() <= 10 && val.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+    }
+
+    function isValidDateYYYYMMDD(val) {
+      return val is string && val.size() == 10 && val.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    function isValidMonthYYYYMM(val) {
+      return val is string && val.size() == 7 && val.matches('^[0-9]{4}-[0-9]{2}$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn()
+        && isVerifiedEmail()
+        && request.auth.token.email == 'syarifuddinahmadz@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin()
+        || (
+          isSignedIn()
+          && isVerifiedEmail()
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN'
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.approvalStatus == 'APPROVED'
+        );
+    }
+
+    function isKepalaSekolah() {
+      return isSignedIn()
+        && isVerifiedEmail()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'KEPALA_SEKOLAH'
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.approvalStatus == 'APPROVED';
+    }
+
+    function isApprovedUser() {
+      return isBootstrappedAdmin()
+        || (
+          isSignedIn()
+          && isVerifiedEmail()
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.approvalStatus == 'APPROVED'
+        );
+    }
+
+    function isApprovedTeacherOrAdmin() {
+      return isBootstrappedAdmin()
+        || (
+          isSignedIn()
+          && isVerifiedEmail()
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.approvalStatus == 'APPROVED'
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['GURU', 'ADMIN']
+        );
+    }
+
+    // --- Entity Validation Blueprint: UserProfile ---
+    function isValidUserProfile(data) {
+      return data.keys().hasAll([
+          'uid', 'email', 'displayName', 'photoURL', 'nip', 'jabatan',
+          'requestedRole', 'role', 'approvalStatus', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'photoURL', 'nip', 'jabatan',
+          'requestedRole', 'role', 'approvalStatus', 'createdAt', 'updatedAt',
+          'approvedBy', 'rejectionReason'
+        ])
+        && data.uid is string && isValidId(data.uid)
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 254
+        && data.displayName is string && data.displayName.size() >= 2 && data.displayName.size() <= 100
+        && data.photoURL is string && data.photoURL.size() <= 500
+        && data.nip is string && data.nip.size() <= 30
+        && data.jabatan is string && data.jabatan.size() <= 100
+        && data.requestedRole is string && data.requestedRole in ['ADMIN', 'GURU', 'KEPALA_SEKOLAH']
+        && data.role is string && data.role in ['ADMIN', 'GURU', 'KEPALA_SEKOLAH', 'PENDING']
+        && data.approvalStatus is string && data.approvalStatus in ['PENDING', 'APPROVED', 'REJECTED']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && (!('approvedBy' in data) || (data.approvedBy is string && isValidId(data.approvedBy)))
+        && (!('rejectionReason' in data) || (data.rejectionReason is string && data.rejectionReason.size() <= 300));
+    }
+
+    // --- Entity Validation Blueprint: AcademicYear ---
+    function isValidAcademicYear(data) {
+      return data.keys().hasAll(['name', 'semester', 'isActive', 'createdBy', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['name', 'semester', 'isActive', 'createdBy', 'createdAt', 'updatedAt'])
+        && data.name is string && data.name.size() >= 4 && data.name.size() <= 30
+        && data.semester is string && data.semester in ['GANJIL', 'GENAP']
+        && data.isActive is bool
+        && data.createdBy is string && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // --- Entity Validation Blueprint: Teacher ---
+    function isValidTeacher(data) {
+      return data.keys().hasAll([
+          'userUid', 'fullName', 'nip', 'email', 'specialty', 'status',
+          'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'userUid', 'fullName', 'nip', 'email', 'specialty', 'status',
+          'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && isValidOptionalId(data.userUid)
+        && data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 100
+        && data.nip is string && data.nip.size() <= 30
+        && data.email is string && data.email.size() <= 254
+        && data.specialty is string && data.specialty.size() <= 100
+        && data.status is string && data.status in ['AKTIF', 'NONAKTIF']
+        && data.createdBy is string && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // --- Entity Validation Blueprint: SchoolClass ---
+    function isValidSchoolClass(data) {
+      return data.keys().hasAll([
+          'name', 'gradeLevel', 'major', 'homeroomTeacherId', 'homeroomTeacherName',
+          'studentCount', 'status', 'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'name', 'gradeLevel', 'major', 'homeroomTeacherId', 'homeroomTeacherName',
+          'studentCount', 'status', 'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 50
+        && data.gradeLevel is string && data.gradeLevel in ['X', 'XI', 'XII', 'XIII']
+        && data.major is string && data.major.size() >= 2 && data.major.size() <= 100
+        && isValidOptionalId(data.homeroomTeacherId)
+        && data.homeroomTeacherName is string && data.homeroomTeacherName.size() <= 100
+        && data.studentCount is int && data.studentCount >= 0 && data.studentCount <= 100
+        && data.status is string && data.status in ['AKTIF', 'NONAKTIF']
+        && data.createdBy is string && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // --- Entity Validation Blueprint: Subject ---
+    function isValidSubject(data) {
+      return data.keys().hasAll(['code', 'name', 'category', 'status', 'createdBy', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['code', 'name', 'category', 'status', 'createdBy', 'createdAt', 'updatedAt'])
+        && data.code is string && data.code.size() >= 2 && data.code.size() <= 30
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 120
+        && data.category is string && data.category in ['UMUM', 'KEJURUAN', 'MUATAN_LOKAL', 'PROJEK_P5']
+        && data.status is string && data.status in ['AKTIF', 'NONAKTIF']
+        && data.createdBy is string && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // --- Entity Validation Blueprint: TeachingSchedule ---
+    function isValidTeachingSchedule(data) {
+      return data.keys().hasAll([
+          'academicYearId', 'academicYearLabel', 'teacherId', 'teacherName', 'teacherUid',
+          'classId', 'className', 'subjectId', 'subjectName', 'dayOfWeek',
+          'periodStart', 'periodEnd', 'startTime', 'endTime', 'room', 'status',
+          'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'academicYearId', 'academicYearLabel', 'teacherId', 'teacherName', 'teacherUid',
+          'classId', 'className', 'subjectId', 'subjectName', 'dayOfWeek',
+          'periodStart', 'periodEnd', 'startTime', 'endTime', 'room', 'status',
+          'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.academicYearId)
+        && data.academicYearLabel is string && data.academicYearLabel.size() >= 4 && data.academicYearLabel.size() <= 50
+        && isValidId(data.teacherId)
+        && data.teacherName is string && data.teacherName.size() >= 2 && data.teacherName.size() <= 100
+        && isValidOptionalId(data.teacherUid)
+        && isValidId(data.classId)
+        && data.className is string && data.className.size() >= 2 && data.className.size() <= 50
+        && isValidId(data.subjectId)
+        && data.subjectName is string && data.subjectName.size() >= 2 && data.subjectName.size() <= 120
+        && data.dayOfWeek is string && data.dayOfWeek in ['SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU']
+        && data.periodStart is int && data.periodStart >= 1 && data.periodStart <= 16
+        && data.periodEnd is int && data.periodEnd >= data.periodStart && data.periodEnd <= 16
+        && isValidTimeHHMM(data.startTime)
+        && isValidTimeHHMM(data.endTime)
+        && data.room is string && data.room.size() <= 60
+        && data.status is string && data.status in ['AKTIF', 'NONAKTIF']
+        && data.createdBy is string && isValidId(data.createdBy)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // --- Entity Validation Blueprint: TeachingJournal ---
+    function isValidTeachingJournal(data) {
+      return data.keys().hasAll([
+          'academicYearId', 'academicYearLabel', 'scheduleId', 'teacherUid', 'teacherName',
+          'classId', 'className', 'subjectId', 'subjectName', 'date',
+          'periodStart', 'periodEnd', 'topic', 'activities',
+          'presentCount', 'absentCount', 'notes', 'teachingStatus',
+          'documentationUrl', 'documentationCaption', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'academicYearId', 'academicYearLabel', 'scheduleId', 'teacherUid', 'teacherName',
+          'classId', 'className', 'subjectId', 'subjectName', 'date',
+          'periodStart', 'periodEnd', 'topic', 'activities',
+          'presentCount', 'absentCount', 'notes', 'teachingStatus',
+          'documentationUrl', 'documentationCaption', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.academicYearId)
+        && data.academicYearLabel is string && data.academicYearLabel.size() >= 4 && data.academicYearLabel.size() <= 50
+        && isValidOptionalId(data.scheduleId)
+        && isValidId(data.teacherUid)
+        && data.teacherName is string && data.teacherName.size() >= 2 && data.teacherName.size() <= 100
+        && isValidId(data.classId)
+        && data.className is string && data.className.size() >= 2 && data.className.size() <= 50
+        && isValidId(data.subjectId)
+        && data.subjectName is string && data.subjectName.size() >= 2 && data.subjectName.size() <= 120
+        && isValidDateYYYYMMDD(data.date)
+        && data.periodStart is int && data.periodStart >= 1 && data.periodStart <= 16
+        && data.periodEnd is int && data.periodEnd >= data.periodStart && data.periodEnd <= 16
+        && data.topic is string && data.topic.size() >= 3 && data.topic.size() <= 300
+        && data.activities is string && data.activities.size() >= 5 && data.activities.size() <= 1500
+        && data.presentCount is int && data.presentCount >= 0 && data.presentCount <= 100
+        && data.absentCount is int && data.absentCount >= 0 && data.absentCount <= 100
+        && data.notes is string && data.notes.size() <= 800
+        && data.teachingStatus is string && data.teachingStatus in ['TERLAKSANA', 'TUGAS_MANDIRI', 'PENGGANTI']
+        && data.documentationUrl is string && data.documentationUrl.size() <= 800
+        && data.documentationCaption is string && data.documentationCaption.size() <= 200
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // --- Entity Validation Blueprint: JournalPhoto ---
+    function isValidJournalPhoto(data) {
+      return data.keys().hasAll(['ownerUid', 'fileName', 'mimeType', 'sizeBytes', 'dataUrl', 'createdAt'])
+        && data.keys().hasOnly(['ownerUid', 'fileName', 'mimeType', 'sizeBytes', 'dataUrl', 'createdAt'])
+        && isValidId(data.ownerUid)
+        && data.fileName is string && data.fileName.size() >= 1 && data.fileName.size() <= 120
+        && data.mimeType is string && data.mimeType in ['image/jpeg', 'image/webp']
+        && data.sizeBytes is int && data.sizeBytes >= 1 && data.sizeBytes <= 180000
+        && data.dataUrl is string && data.dataUrl.size() >= 30 && data.dataUrl.size() <= 240000
+        && data.dataUrl.matches('^data:image/(jpeg|webp);base64,[A-Za-z0-9+/=]+$')
+        && data.createdAt is timestamp;
+    }
+
+    // --- Entity Validation Blueprint: PrincipalSupervision ---
+    function isValidPrincipalSupervision(data) {
+      return data.keys().hasAll([
+          'academicYearId', 'academicYearLabel', 'journalId', 'teacherUid', 'teacherName',
+          'periodMonth', 'supervisionStatus', 'notes', 'supervisorUid', 'supervisorName',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'academicYearId', 'academicYearLabel', 'journalId', 'teacherUid', 'teacherName',
+          'periodMonth', 'supervisionStatus', 'notes', 'supervisorUid', 'supervisorName',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.academicYearId)
+        && data.academicYearLabel is string && data.academicYearLabel.size() >= 4 && data.academicYearLabel.size() <= 50
+        && isValidOptionalId(data.journalId)
+        && isValidOptionalId(data.teacherUid)
+        && data.teacherName is string && data.teacherName.size() >= 2 && data.teacherName.size() <= 100
+        && isValidMonthYYYYMM(data.periodMonth)
+        && data.supervisionStatus is string && data.supervisionStatus in ['BAIK', 'PERLU_PEMBINAAN', 'TINDAK_LANJUT']
+        && data.notes is string && data.notes.size() >= 5 && data.notes.size() <= 1000
+        && isValidId(data.supervisorUid)
+        && data.supervisorName is string && data.supervisorName.size() >= 2 && data.supervisorName.size() <= 100
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // --- Collection: /users/{userId} ---
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
+
+      allow list: if isSignedIn() && (isBootstrappedAdmin() || resource.data.uid == request.auth.uid);
+
+      allow create: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == userId
+        && incoming().email == request.auth.token.email
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && !('approvedBy' in incoming())
+        && !('rejectionReason' in incoming())
+        && (
+          (isBootstrappedAdmin()
+            && incoming().role == 'ADMIN'
+            && incoming().approvalStatus == 'APPROVED')
+          ||
+          (incoming().role == 'PENDING'
+            && incoming().approvalStatus == 'PENDING')
+        );
+
+      allow update: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().email == existing().email
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (isAdmin()
+            && incoming().approvalStatus == 'APPROVED'
+            && incoming().role in ['ADMIN', 'GURU', 'KEPALA_SEKOLAH']
+            && ('approvedBy' in incoming()) && incoming().approvedBy == request.auth.uid
+            && !('rejectionReason' in incoming())
+            && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'approvalStatus', 'approvedBy', 'updatedAt', 'rejectionReason']))
+          ||
+          (isAdmin()
+            && incoming().approvalStatus == 'REJECTED'
+            && incoming().role == 'PENDING'
+            && ('approvedBy' in incoming()) && incoming().approvedBy == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'approvalStatus', 'approvedBy', 'rejectionReason', 'updatedAt']))
+          ||
+          (isOwner(userId)
+            && existing().approvalStatus == 'REJECTED'
+            && incoming().approvalStatus == 'PENDING'
+            && incoming().role == 'PENDING'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'nip', 'jabatan', 'requestedRole', 'approvalStatus', 'role', 'updatedAt']))
+          ||
+          (isOwner(userId)
+            && existing().approvalStatus == 'APPROVED'
+            && incoming().role == existing().role
+            && incoming().approvalStatus == existing().approvalStatus
+            && incoming().requestedRole == existing().requestedRole
+            && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'nip', 'jabatan', 'photoURL', 'updatedAt']))
+        );
+
+      allow delete: if false;
+    }
+
+    // --- Collection: /academicYears/{yearId} ---
+    match /academicYears/{yearId} {
+      allow get: if isSignedIn() && isVerifiedEmail() && isValidId(yearId) && isApprovedUser();
+      allow list: if isSignedIn() && isVerifiedEmail() && (isAdmin() || isKepalaSekolah() || resource.data.isActive == true);
+
+      allow create: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(yearId)
+        && isValidAcademicYear(incoming())
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && isAdmin();
+
+      allow update: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(yearId)
+        && isValidAcademicYear(incoming())
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'semester', 'isActive', 'updatedAt'])
+        && isAdmin();
+
+      allow delete: if isSignedIn() && isVerifiedEmail() && isValidId(yearId) && isAdmin();
+    }
+
+    // --- Collection: /teachers/{teacherId} ---
+    match /teachers/{teacherId} {
+      allow get: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(teacherId)
+        && (isAdmin() || isKepalaSekolah() || resource.data.userUid == request.auth.uid);
+
+      allow list: if isSignedIn()
+        && isVerifiedEmail()
+        && (isAdmin() || isKepalaSekolah() || resource.data.userUid == request.auth.uid);
+
+      allow create: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(teacherId)
+        && isValidTeacher(incoming())
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && isAdmin();
+
+      allow update: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(teacherId)
+        && isValidTeacher(incoming())
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'userUid', 'fullName', 'nip', 'email', 'specialty', 'status', 'updatedAt'
+        ])
+        && isAdmin();
+
+      allow delete: if isSignedIn() && isVerifiedEmail() && isValidId(teacherId) && isAdmin();
+    }
+
+    // --- Collection: /classes/{classId} ---
+    match /classes/{classId} {
+      allow get: if isSignedIn() && isVerifiedEmail() && isValidId(classId) && isApprovedUser();
+      allow list: if isSignedIn() && isVerifiedEmail() && (isAdmin() || isKepalaSekolah() || resource.data.status == 'AKTIF');
+
+      allow create: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(classId)
+        && isValidSchoolClass(incoming())
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (incoming().homeroomTeacherId == '' || exists(/databases/$(database)/documents/teachers/$(incoming().homeroomTeacherId)))
+        && isAdmin();
+
+      allow update: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(classId)
+        && isValidSchoolClass(incoming())
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'name', 'gradeLevel', 'major', 'homeroomTeacherId', 'homeroomTeacherName',
+          'studentCount', 'status', 'updatedAt'
+        ])
+        && (incoming().homeroomTeacherId == '' || exists(/databases/$(database)/documents/teachers/$(incoming().homeroomTeacherId)))
+        && isAdmin();
+
+      allow delete: if isSignedIn() && isVerifiedEmail() && isValidId(classId) && isAdmin();
+    }
+
+    // --- Collection: /subjects/{subjectId} ---
+    match /subjects/{subjectId} {
+      allow get: if isSignedIn() && isVerifiedEmail() && isValidId(subjectId) && isApprovedUser();
+      allow list: if isSignedIn() && isVerifiedEmail() && (isAdmin() || isKepalaSekolah() || resource.data.status == 'AKTIF');
+
+      allow create: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(subjectId)
+        && isValidSubject(incoming())
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && isAdmin();
+
+      allow update: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(subjectId)
+        && isValidSubject(incoming())
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['code', 'name', 'category', 'status', 'updatedAt'])
+        && isAdmin();
+
+      allow delete: if isSignedIn() && isVerifiedEmail() && isValidId(subjectId) && isAdmin();
+    }
+
+    // --- Collection: /schedules/{scheduleId} ---
+    match /schedules/{scheduleId} {
+      allow get: if isSignedIn() && isVerifiedEmail() && isValidId(scheduleId) && isApprovedUser();
+      allow list: if isSignedIn()
+        && isVerifiedEmail()
+        && (
+          isAdmin()
+          || isKepalaSekolah()
+          || resource.data.teacherUid == request.auth.uid
+          || resource.data.status == 'AKTIF'
+        );
+
+      allow create: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(scheduleId)
+        && isValidTeachingSchedule(incoming())
+        && incoming().createdBy == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/academicYears/$(incoming().academicYearId))
+        && exists(/databases/$(database)/documents/teachers/$(incoming().teacherId))
+        && exists(/databases/$(database)/documents/classes/$(incoming().classId))
+        && exists(/databases/$(database)/documents/subjects/$(incoming().subjectId))
+        && isAdmin();
+
+      allow update: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(scheduleId)
+        && isValidTeachingSchedule(incoming())
+        && incoming().createdBy == existing().createdBy
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'academicYearId', 'academicYearLabel', 'teacherId', 'teacherName', 'teacherUid',
+          'classId', 'className', 'subjectId', 'subjectName', 'dayOfWeek',
+          'periodStart', 'periodEnd', 'startTime', 'endTime', 'room', 'status', 'updatedAt'
+        ])
+        && exists(/databases/$(database)/documents/academicYears/$(incoming().academicYearId))
+        && exists(/databases/$(database)/documents/teachers/$(incoming().teacherId))
+        && exists(/databases/$(database)/documents/classes/$(incoming().classId))
+        && exists(/databases/$(database)/documents/subjects/$(incoming().subjectId))
+        && isAdmin();
+
+      allow delete: if isSignedIn() && isVerifiedEmail() && isValidId(scheduleId) && isAdmin();
+    }
+
+    // --- Collection: /teachingJournals/{journalId} ---
+    match /teachingJournals/{journalId} {
+      allow get: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(journalId)
+        && (existing().teacherUid == request.auth.uid || isAdmin() || isKepalaSekolah());
+
+      allow list: if isSignedIn()
+        && isVerifiedEmail()
+        && (isAdmin() || isKepalaSekolah() || resource.data.teacherUid == request.auth.uid);
+
+      allow create: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(journalId)
+        && isValidTeachingJournal(incoming())
+        && incoming().teacherUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/academicYears/$(incoming().academicYearId))
+        && exists(/databases/$(database)/documents/classes/$(incoming().classId))
+        && exists(/databases/$(database)/documents/subjects/$(incoming().subjectId))
+        && (incoming().scheduleId == '' || exists(/databases/$(database)/documents/schedules/$(incoming().scheduleId)))
+        && isApprovedTeacherOrAdmin();
+
+      allow update: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(journalId)
+        && isValidTeachingJournal(incoming())
+        && incoming().teacherUid == existing().teacherUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'academicYearId', 'academicYearLabel', 'scheduleId', 'teacherName',
+          'classId', 'className', 'subjectId', 'subjectName', 'date',
+          'periodStart', 'periodEnd', 'topic', 'activities',
+          'presentCount', 'absentCount', 'notes', 'teachingStatus',
+          'documentationUrl', 'documentationCaption', 'updatedAt'
+        ])
+        && exists(/databases/$(database)/documents/academicYears/$(incoming().academicYearId))
+        && exists(/databases/$(database)/documents/classes/$(incoming().classId))
+        && exists(/databases/$(database)/documents/subjects/$(incoming().subjectId))
+        && (incoming().scheduleId == '' || exists(/databases/$(database)/documents/schedules/$(incoming().scheduleId)))
+        && (existing().teacherUid == request.auth.uid || isAdmin());
+
+      allow delete: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(journalId)
+        && (existing().teacherUid == request.auth.uid || isAdmin());
+    }
+
+    // --- Collection: /journalPhotos/{photoId} ---
+    match /journalPhotos/{photoId} {
+      allow get: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(photoId)
+        && (existing().ownerUid == request.auth.uid || isAdmin() || isKepalaSekolah());
+
+      allow list: if isSignedIn()
+        && isVerifiedEmail()
+        && (isAdmin() || isKepalaSekolah() || resource.data.ownerUid == request.auth.uid);
+
+      allow create: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(photoId)
+        && isValidJournalPhoto(incoming())
+        && incoming().ownerUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && isApprovedTeacherOrAdmin();
+
+      allow update: if false;
+
+      allow delete: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(photoId)
+        && (existing().ownerUid == request.auth.uid || isAdmin());
+    }
+
+    // --- Collection: /supervisions/{supervisionId} ---
+    match /supervisions/{supervisionId} {
+      allow get: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(supervisionId)
+        && (isAdmin() || isKepalaSekolah() || (isApprovedUser() && existing().teacherUid == request.auth.uid));
+
+      allow list: if isSignedIn()
+        && isVerifiedEmail()
+        && (isAdmin() || isKepalaSekolah() || resource.data.teacherUid == request.auth.uid);
+
+      allow create: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(supervisionId)
+        && isValidPrincipalSupervision(incoming())
+        && incoming().supervisorUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/academicYears/$(incoming().academicYearId))
+        && (incoming().journalId == '' || exists(/databases/$(database)/documents/teachingJournals/$(incoming().journalId)))
+        && (isKepalaSekolah() || isAdmin());
+
+      allow update: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(supervisionId)
+        && isValidPrincipalSupervision(incoming())
+        && incoming().academicYearId == existing().academicYearId
+        && incoming().journalId == existing().journalId
+        && incoming().teacherUid == existing().teacherUid
+        && incoming().supervisorUid == existing().supervisorUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'academicYearLabel', 'teacherName', 'periodMonth',
+          'supervisionStatus', 'notes', 'supervisorName', 'updatedAt'
+        ])
+        && (isAdmin() || (isKepalaSekolah() && existing().supervisorUid == request.auth.uid));
+
+      allow delete: if isSignedIn()
+        && isVerifiedEmail()
+        && isValidId(supervisionId)
+        && (isAdmin() || (isKepalaSekolah() && existing().supervisorUid == request.auth.uid));
+    }
+  }
+}
